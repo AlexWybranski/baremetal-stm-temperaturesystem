@@ -16,6 +16,11 @@ extern uint32_t _sidata;
 int main(void);
 void __libc_init_array(void);
 
+void Default_Handler(void) {
+    while(1) {
+
+    }
+}
 void Reset_Handler(void);
 void NMI_Handler(void)                 __attribute__((weak, alias("Default_Handler")));
 void HardFault_Handler(void)           __attribute__((weak, alias("Default_Handler")));
@@ -235,8 +240,4 @@ void Reset_Handler(void) {
     __libc_init_array();
 
     main();
-}
-
-void Default_Handler(void){
-    while(1);
 }
