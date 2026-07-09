@@ -4,31 +4,45 @@ LD		:=arm-none-eabi-g++
 
 MACH	:=cortex-m4
 
-CFLAGS		:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -Wall -std=gnu11 -O0 -g
-CXXFLAGS	:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -O0 -g -fno-exceptions -fno-rtti -fno-threadsafe-statics -std=gnu++23
-LINKFLAGS	:= --specs=nano.specs -mcpu=$(MACH) -lstdc++ -mfloat-abi=hard -nostartfiles -mthumb -T startup/stm32_linker_script.ld -Wl,-Map=build/main.map
+INCFLAGS	:= -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F
 
+CFLAGS		:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -Wall -std=gnu11 -O0 -g
+CXXFLAGS	:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -O0 -g -fno-exceptions -fno-rtti -fno-threadsafe-statics -std=gnu++23
+LINKFLAGS	:= --specs=nano.specs -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -lstdc++ -mfloat-abi=hard -nostartfiles -mthumb -T startup/stm32_linker_script.ld -Wl,-Map=build/main.map
 
+CFLAGS		+= $(INCFLAGS)
+CXXFLAGS	+= $(INCFLAGS)
+
+RTOSSRCS	:= $(shell find freertos -name '*.c')
 CSRCS		:= $(shell find startup src -name '*.c')
 CPPSRCS		:= $(shell find src -name '*.cpp')
 
-CPPOBJS   := $(patsubst src/%.cpp,build/%.o,$(CPPSRCS))
-COBJS     := $(patsubst startup/%.c,build/%.o,$(patsubst src/%.c,build/%.o,$(CSRCS)))
+RTOSOBJS	:= $(patsubst freertos/%.c,build/freertos/%.o,$(RTOSSRCS))
+CPPOBJS   	:= $(patsubst src/%.cpp,build/%.o,$(CPPSRCS))
+COBJS     	:= $(patsubst startup/%.c,build/%.o,$(patsubst src/%.c,build/%.o,$(CSRCS)))
 
 TARGET		:= build/main.elf
-#dodaj obsługę kompilacji dla folderu freertos
+
 all: $(TARGET)
 
+build/freertos/%.o: freertos/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $< -o $@
+
 build/%.o: src/%.cpp
+	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $< -o $@
 
 build/%.o: startup/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< -o $@
 
 build/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< -o $@
 
-$(TARGET): $(COBJS) $(CPPOBJS)
+$(TARGET): $(COBJS) $(CPPOBJS) $(RTOSOBJS)
+	@mkdir -p $(dir $@)
 	$(LD) $(LINKFLAGS) $^ -o $@
 
 clean:
