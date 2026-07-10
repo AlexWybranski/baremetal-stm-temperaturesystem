@@ -2,7 +2,7 @@
 #define GPIO_HPP
 #include <cstdint>
 
-struct GPIO {
+struct GPIO_regs {
     volatile uint32_t MODER;
     volatile uint32_t OTYPER;
     volatile uint32_t OSPEEDR;
@@ -20,16 +20,15 @@ struct GPIO {
 template<uint32_t base_addr>
 class GpioPortHandle {
     private:
-        enum class Mode {
-            input = 0b00,
-            output =  0b01,
-            alternate = 0b10,
-            analog = 0b11
-        };
-
-        GPIO* const m_GPIO; 
-
+        GPIO_regs* const m_GPIO; 
+    
     public:
+        enum class Mode : uint32_t {
+            input = 0b00U,
+            output =  0b01U,
+            alternate = 0b10U,
+            analog = 0b11U
+        };
         void setPinMode(Mode mode, uint32_t pinNum) {
             const uint32_t shift = pinNum*2U;
             constexpr uint32_t resetValue = 0b11U;

@@ -1,6 +1,7 @@
 #include <cstdint>
 #include "FreeRTOS.h"
 #include "task.h"
+#include "gpio.hpp"
 
 extern "C" {
     void _init(void) {}
@@ -19,6 +20,5 @@ extern "C" {
 }
 
 int main(void) {
-    
     return 0;
 }
