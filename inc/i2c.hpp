@@ -16,4 +16,13 @@ struct I2C_regs {
     volatile uint32_t TXDR;
 };
 
+template<uint32_t baseAddr>
+class I2cHandle {
+    private:
+        I2C_regs* const m_I2C;
+    public:
+        I2cHandle() : m_I2C(reinterpret_cast<I2C_regs*>(base_addr)) {}
+        ~I2cHandle() = default;
+};
+
 #endif

@@ -16,4 +16,13 @@ struct USART_regs {
     volatile uint32_t TDR;
 };
 
+template<uint32_t baseAddr>
+class UsartHandle {
+    private:
+        USART_regs* const m_USART;
+    public:
+        UsartHandle() : m_USART(reinterpret_cast<USART_regs*>(base_addr)) {}
+        ~UsartHandle() = default;
+};
+
 #endif
