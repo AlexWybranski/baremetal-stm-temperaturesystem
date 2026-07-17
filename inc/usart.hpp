@@ -21,7 +21,7 @@ class UsartHandle {
     private:
         USART_regs* const m_USART;
     public:
-        UsartHandle() : m_USART(reinterpret_cast<USART_regs*>(base_addr)) {}
+        UsartHandle() : m_USART(reinterpret_cast<USART_regs*>(baseAddr)) {}
         ~UsartHandle() = default;
 };
 

@@ -74,11 +74,30 @@ class RccHandle {
         }
 
         void enableI2cClock() {
-
+            constexpr uint32_t i2c1Offset = 21;
+            m_RCC->APB1ENR1 |= (0b1U << i2c1Offset);
         }
 
         void enableUsartClock() {
 
+        }
+
+        void setMsiTo8MHz() {
+            constexpr uint32_t rangeShift = 4;
+            constexpr uint32_t MSIRGSELshift = 3;
+            constexpr uint32_t resetValue = 0b1111U;
+            constexpr uint32_t setValue = 0b0111U;
+
+            m_RCC->CR |= (0b1U << MSIRGSELshift);
+
+            uint32_t tempRegister = m_RCC->CR;
+
+            tempRegister &= ~(resetValue << rangeShift);
+            tempRegister |= (setValue << rangeShift);
+
+            m_RCC->CR = tempRegister;
+
+            while((m_RCC->CR & (0b1U << 1U)) == 0) {}
         }
 };
 
