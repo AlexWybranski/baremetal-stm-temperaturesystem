@@ -60,17 +60,25 @@ class I2cHandle {
 
         //this function works only in 7 bit addressing mode
         void write(uint32_t devAddr, 
-                   uint32_t innerAddr,
-                   uint8_t* dataBuffer,
-                   uint8_t messageSize)
+                   uint8_t innerAddr,
+                   uint8_t value,
+                   bool holdLine,
+                   bool addrOnly)
         {
             uint32_t cr2RegMask = m_I2C->CR2;
             cr2RegMask = 0;
 
-            cr2RegMask = ((devAddr << SADD_pos) |
-                          (static_cast<uint32_t>(messageSize+1) << NBYTES_pos) |
-                          (0b1U << AUTOEND_pos)
-                          );
+            uint8_t nbytes;
+            nbytes = (addrOnly) ? 0x1U : 0x2U;
+
+            if(!holdLine) {
+                cr2RegMask = ((devAddr << SADD_pos) |
+                              (nbytes << NBYTES_pos) |
+                              (0b1U << AUTOEND_pos)
+                              );
+            } else {
+                cr2RegMask = ((devAddr << SADD_pos) | (nbytes << NBYTES_pos));
+            }
 
             m_I2C->CR2 = cr2RegMask;
             //start
@@ -78,19 +86,22 @@ class I2cHandle {
 
             //wait for TXIS flag
             while((m_I2C->ISR & (0b1U << TXIS_pos)) == 0) {}
+            m_I2C->TXDR = static_cast<uint32_t>(innerAddr);
 
-            m_I2C->TXDR = innerAddr;
-
-            for (uint8_t i = 0; i < messageSize; i++) {
+            if(!addrOnly) {
                 while((m_I2C->ISR & (0b1U << TXIS_pos)) == 0) {} // wait for TXIS
-                m_I2C->TXDR = dataBuffer[i];
+                m_I2C->TXDR = static_cast<uint32_t>(value);
             }
             
-            //wait for STOPF flag
-            while((m_I2C->ISR & (0b1U << STOPF_pos)) == 0) {}
-
-            //clear STOPCF flag
-            m_I2C->ICR |= (0b1U << STOPCF_pos);
+            if(holdLine) {
+                while((m_I2C->ISR & (0b1U << TC_pos)) == 0) {}
+            } else {
+                //wait for STOPF flag
+                while((m_I2C->ISR & (0b1U << STOPF_pos)) == 0) {}
+    
+                //clear STOPCF flag
+                m_I2C->ICR |= (0b1U << STOPCF_pos);
+            }
         }
 
         void read(uint32_t devAddr, 
@@ -98,21 +109,9 @@ class I2cHandle {
                   uint8_t* dataBuffer,
                   uint8_t dataSize)
         {
+            write(devAddr, innerAddr, 0, 1, 1);
+
             uint32_t cr2RegMask = m_I2C->CR2;
-            cr2RegMask = 0;
-
-            cr2RegMask = ((devAddr << SADD_pos) | (0x1U << NBYTES_pos));
-
-            m_I2C->CR2 = cr2RegMask;
-            //start
-            m_I2C->CR2 |= (0b1U << START_pos);
-
-            //wait for TXIS flag
-            while((m_I2C->ISR & (0b1U << TXIS_pos)) == 0) {}
-
-            m_I2C->TXDR = innerAddr;
-
-            while((m_I2C->ISR & (0b1U << TC_pos)) == 0) {}
 
             cr2RegMask = 0;
             
