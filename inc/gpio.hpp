@@ -63,6 +63,14 @@ class GpioPortHandle {
             }
         }
 
+        void setMultiplePinsState(bool state, uint32_t pinMask) {
+            if(state) {
+                m_GPIO->BSRR = pinMask;
+            } else {
+                m_GPIO->BRR = pinMask;
+            }
+        }
+
         void setPinPullUp(Pull pull, uint32_t pinNum) {
             const uint32_t shift = pinNum*2U;
             constexpr uint32_t resetValue = 0b11U;

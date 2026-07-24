@@ -5,6 +5,7 @@
 #include "rcc.hpp"
 #include "i2c.hpp"
 #include "bme280.hpp"
+#include "display.hpp"
 
 extern "C" {
     void _init(void) {}
@@ -21,7 +22,7 @@ extern "C" {
         *pulIdleTaskStackSize = 128;
     }
 }
-void basicDelay(int ms);
+void basicDelay(uint32_t ms);
 
 
 int main(void) {
@@ -29,9 +30,11 @@ int main(void) {
     rcc.setMsiTo8MHz();
     rcc.enableGpioClock(0);
     rcc.enableGpioClock(1);
+    rcc.enableGpioClock(2);
 
     GpioPortHandle<0x48000000U> gpioA;
     GpioPortHandle<0x48000400U> gpioB;
+    GpioPortHandle<0x48000800U> gpioC;
 
     //PB8 - SCL PB9 - SDA
     gpioB.setPinMode(decltype(gpioB)::Mode::alternate, 8);
@@ -57,20 +60,46 @@ int main(void) {
 
     bme280.init();
 
+    DisplayDriver<decltype(gpioC), basicDelay> display(gpioC);
+
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 0);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 1);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 2);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 3);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 4);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 5);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 6);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 7);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 8);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 9);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 10);
+    gpioC.setPinMode(decltype(gpioC)::Mode::output, 11);
+
+    gpioC.setPinState(1, 0);
+    gpioC.setPinState(1, 1);
+    gpioC.setPinState(1, 2);
+    gpioC.setPinState(1, 3);
+
+    int32_t temperature;
+
+    display.testDisplay();
 
     while(1) {
-        bme280.readTemp();
-        gpioA.togglePin(5);
-        basicDelay(1000);
+        temperature = bme280.readTemp();
+        display.sliceTemp(temperature);
+        display.displayTemp();
+        basicDelay(50);
     }
     return 0;
 }
 
-void basicDelay(int ms) {
-    ms *= 1000;
+void basicDelay(uint32_t ms) {
+    volatile uint32_t remaining_ms = ms; 
 
-    while(ms>0) {
-        __asm__ __volatile__("nop");
-        --ms;
+    while (remaining_ms > 0U) {
+        for (volatile uint32_t i = 0U; i < 1000U; i = i + 1) {
+            __asm__ __volatile__("nop");
+        }
+        remaining_ms = remaining_ms - 1;
     }
 }

@@ -1,7 +1,6 @@
 #ifndef BME280_HPP
 #define BME280_HPP
 #include <cstdint>
-#include "i2c.hpp"
 
 template<typename I2cPort>
 class BME280Handle {
@@ -73,7 +72,7 @@ class BME280Handle {
             m_i2c.write(BME_ADDR, CONFIG, bme280_reg, 0, 0);
         }
 
-        uint32_t readTemp() {
+        int32_t readTemp() {
             int32_t temperature;
             uint8_t tempBuffer[3];
             m_i2c.read(BME_ADDR, TEMP_MSB, tempBuffer, 3);
