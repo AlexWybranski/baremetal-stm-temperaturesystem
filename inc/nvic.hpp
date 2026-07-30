@@ -2,7 +2,6 @@
 #define NVIC_HPP
 #include <cstdint>
 
-//baseAddr of nvic 0xE000E000
 template<uint32_t baseAddr>
 class NvicHandler {
     private:

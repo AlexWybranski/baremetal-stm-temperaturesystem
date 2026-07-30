@@ -82,22 +82,23 @@ class RccHandle {
 
         }
 
-        void setMsiTo8MHz() {
+        static void setMsiTo8MHz() {
+            auto* const localRccRegs = reinterpret_cast<RCC_regs*>(baseAddr);
             constexpr uint32_t rangeShift = 4;
             constexpr uint32_t MSIRGSELshift = 3;
             constexpr uint32_t resetValue = 0b1111U;
             constexpr uint32_t setValue = 0b0111U;
 
-            m_RCC->CR |= (0b1U << MSIRGSELshift);
+            localRccRegs->CR |= (0b1U << MSIRGSELshift);
 
-            uint32_t tempRegister = m_RCC->CR;
+            uint32_t tempRegister = localRccRegs->CR;
 
             tempRegister &= ~(resetValue << rangeShift);
             tempRegister |= (setValue << rangeShift);
 
-            m_RCC->CR = tempRegister;
+            localRccRegs->CR = tempRegister;
 
-            while((m_RCC->CR & (0b1U << 1U)) == 0) {}
+            while((localRccRegs->CR & (0b1U << 1U)) == 0) {}
         }
 };
 

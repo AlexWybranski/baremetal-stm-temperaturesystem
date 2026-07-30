@@ -15,6 +15,7 @@ extern uint32_t _sidata;
 
 int main(void);
 void __libc_init_array(void);
+void SystemInit(void);
 
 void Default_Handler(void) {
     while(1) {
@@ -220,6 +221,8 @@ uint32_t vector_table[] __attribute__((section (".vector_table"))) = {
 };
 
 void Reset_Handler(void) {
+    SystemInit();
+
     uint32_t size = (uint32_t)&__data_end__ - (uint32_t)&__data_start__;
 
     uint8_t *pDestination = (uint8_t*)&__data_start__;

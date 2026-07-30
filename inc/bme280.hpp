@@ -20,6 +20,10 @@ class BME280Handle {
         
         int32_t t_fine = 0;
         
+        int32_t temperature;
+
+        uint8_t m_bmeBuffer[8];
+
         int32_t compensateTemp(uint32_t temp_raw) {
             int32_t var1, var2, T;
 
@@ -43,9 +47,8 @@ class BME280Handle {
         ~BME280Handle() = default;
 
         bool isAlive() {
-            uint8_t isSensorAlive;
-            m_i2c.read(BME_ADDR, CHIP_ID, &isSensorAlive, 1);
-            if(isSensorAlive != 0x60) {
+            m_i2c.read(BME_ADDR, CHIP_ID, m_bmeBuffer, 1);
+            if(m_bmeBuffer[0] != 0x60) {
                 return false;
             } else {
                 return true;
@@ -53,30 +56,28 @@ class BME280Handle {
         }
         
         void init() {
-            uint8_t compensationParameters[6];
-            m_i2c.read(BME_ADDR, COMP_PAR, compensationParameters, 6);
-            dig_T1 = ((compensationParameters[0] << 0) |
-            (compensationParameters[1] << 8));
-            dig_T2 = ((compensationParameters[2] << 0) |
-            (compensationParameters[3] << 8));
-            dig_T3 = ((compensationParameters[4] << 0) |
-            (compensationParameters[5] << 8));
+            m_i2c.read(BME_ADDR, COMP_PAR, m_bmeBuffer, 6);
+            dig_T1 =    ((m_bmeBuffer[0] << 0) |
+                        (m_bmeBuffer[1] << 8));
 
-            uint8_t bme280_reg = 0;
-            m_i2c.read(BME_ADDR, CTRL_MEAS, &bme280_reg, 1);
-            bme280_reg |= ((0b11U << 0U) | (0b001U << 5U));
-            m_i2c.write(BME_ADDR, CTRL_MEAS, bme280_reg, 0, 0);
-            bme280_reg = 0;
-            m_i2c.read(BME_ADDR, CONFIG, &bme280_reg, 1);
-            bme280_reg |= ((0b011U << 5U | (0b000U << 2U)));
-            m_i2c.write(BME_ADDR, CONFIG, bme280_reg, 0, 0);
+            dig_T2 =    ((m_bmeBuffer[2] << 0) |
+                        (m_bmeBuffer[3] << 8));
+
+            dig_T3 =    ((m_bmeBuffer[4] << 0) |
+                        (m_bmeBuffer[5] << 8));
+
+            m_i2c.read(BME_ADDR, CTRL_MEAS, m_bmeBuffer, 1);
+            m_bmeBuffer[0] |= ((0b11U << 0U) | (0b001U << 5U));
+            m_i2c.write(BME_ADDR, CTRL_MEAS, m_bmeBuffer[0]);
+            m_bmeBuffer[0] = 0;
+            m_i2c.read(BME_ADDR, CONFIG, m_bmeBuffer, 1);
+            m_bmeBuffer[0] |= ((0b011U << 5U | (0b000U << 2U)));
+            m_i2c.write(BME_ADDR, CONFIG, m_bmeBuffer[0]);
         }
 
         int32_t readTemp() {
-            int32_t temperature;
-            uint8_t tempBuffer[3];
-            m_i2c.read(BME_ADDR, TEMP_MSB, tempBuffer, 3);
-            temperature = ((tempBuffer[0] << 12U) | (tempBuffer[1] << 4U) | (tempBuffer[2] >> 4U));
+            m_i2c.read(BME_ADDR, TEMP_MSB, m_bmeBuffer, 3);
+            temperature = ((m_bmeBuffer[0] << 12U) | (m_bmeBuffer[1] << 4U) | (m_bmeBuffer[2] >> 4U));
             temperature = compensateTemp(temperature);
             return temperature;
         }

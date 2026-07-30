@@ -1,6 +1,8 @@
 #ifndef DISPLAY_HPP
 #define DISPLAY_HPP
 #include <cstdint>
+#include "FreeRTOS.h"
+#include "task.h"
 
 template<typename GpioPort, void (*DelayFunc)(uint32_t)>
 class DisplayDriver {
@@ -21,6 +23,9 @@ class DisplayDriver {
         static constexpr uint32_t SEG_DP = 11;
         
         uint8_t tempDigits[4];
+
+        static constexpr uint32_t ALL_DIG_MASK = ((1U << DIG_1) | (1U << DIG_2) | 
+                                                 (1U << DIG_3) | (1U << DIG_4));
 
         static constexpr uint32_t ALL_SEG_MASK = ((1U << SEG_A) | (1U << SEG_B) |
                                                 (1U << SEG_C) | (1U << SEG_D) |
@@ -80,24 +85,27 @@ class DisplayDriver {
         }
 
         void displayTemp() {
-            static constexpr uint32_t ALL_DIG_MASK = (0b1111U);
-
             for(uint32_t pinNum = 0; pinNum < 4; ++pinNum) {
                 uint8_t currentDig = tempDigits[pinNum];
-                gpio.setMultiplePinsState(1, ALL_DIG_MASK);
+
+                gpio.setMultiplePinsState(1, ALL_DIG_MASK); 
 
                 gpio.setMultiplePinsState(0, ALL_SEG_MASK);
 
+                uint32_t segmentPattern = DIGIT_MAP[currentDig];
+                    
                 if(pinNum == 1) {
-                    gpio.setPinState(1, SEG_DP);
+                    segmentPattern |= (1U << SEG_DP); 
                 }
 
-                gpio.setMultiplePinsState(1, DIGIT_MAP[currentDig]);
+                gpio.setMultiplePinsState(1, segmentPattern);
                 
-                gpio.setPinState(0, pinNum);
-
-                DelayFunc(5U);
+                gpio.setPinState(0, pinNum); 
+ 
+                vTaskDelay(pdMS_TO_TICKS(2));
             }
+            gpio.setMultiplePinsState(1, ALL_DIG_MASK); 
+            gpio.setMultiplePinsState(0, ALL_SEG_MASK);
         }
 
         void testDisplay() {
@@ -108,7 +116,7 @@ class DisplayDriver {
                     gpio.setPinState(1, seg);
                     gpio.setPinState(0, pin);
 
-                    DelayFunc(500U);
+                    DelayFunc(100U);
 
                     gpio.setPinState(0, seg);
                     gpio.setPinState(1, pin);
@@ -118,7 +126,7 @@ class DisplayDriver {
                     gpio.setMultiplePinsState(1, DIGIT_MAP[digit]);
                     gpio.setPinState(0, pin);
                     
-                    DelayFunc(500U);
+                    DelayFunc(100U);
                     
                     gpio.setMultiplePinsState(0, ALL_SEG_MASK);
                     gpio.setPinState(1, pin);
