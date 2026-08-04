@@ -74,12 +74,13 @@ class RccHandle {
         }
 
         void enableI2cClock() {
-            constexpr uint32_t i2c1Offset = 21;
+            constexpr uint32_t i2c1Offset = 21U;
             m_RCC->APB1ENR1 |= (0b1U << i2c1Offset);
         }
 
         void enableUsartClock() {
-
+            constexpr uint32_t usart1Offset = 14U;
+            m_RCC->APB2ENR |= (0b1U << usart1Offset);
         }
 
         static void setMsiTo8MHz() {
