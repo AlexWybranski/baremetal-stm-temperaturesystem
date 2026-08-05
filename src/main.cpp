@@ -11,6 +11,8 @@
 #include "display.hpp"
 #include "nvic.hpp"
 
+#include "cmdparser.hpp"
+
 constexpr uint32_t RCC_BASEADDR     = 0x40021000U;
 constexpr uint32_t I2C1_BASEADDR    = 0x40005400U;
 constexpr uint32_t USART1_BASEADDR  = 0x40013800U;
@@ -71,7 +73,7 @@ TaskHandle_t respondUartTaskHandle = nullptr;
 
 SemaphoreHandle_t xTemperatureMutex = nullptr;
 StaticSemaphore_t xMutexBuffer;
-int32_t g_temperaute;
+int32_t g_temperature;
 
 struct d_ReadTempTaskContext {
     GpioPortHandle<GPIOB_BASEADDR>* gpioB_ptr;
@@ -85,8 +87,9 @@ struct d_DisplayTempTaskContext {
 };
 
 struct d_RespondUartTaskContext {
-    UsartHandle<USART_BASEADDR>* usart_ptr;
-}
+    UsartHandle<USART1_BASEADDR>* usart_ptr;
+    CommandParser* parser_ptr;
+};
 
 void vReadTempTask(void* pvParameters);
 void vDisplayTempTask(void* pvParameters);
@@ -106,6 +109,8 @@ int main(void) {
     static BME280Handle<I2cHandle<I2C1_BASEADDR>> bme280(i2c);
     static DisplayDriver<GpioPortHandle<GPIOC_BASEADDR>, basicDelay> display(gpioC);
 
+    static CommandParser parser;
+
     static d_ReadTempTaskContext readTempTaskContext;
     readTempTaskContext.gpioB_ptr = &gpioB;
     readTempTaskContext.i2c_ptr = &i2c;
@@ -117,6 +122,7 @@ int main(void) {
 
     static d_RespondUartTaskContext respondUartTaskContext;
     respondUartTaskContext.usart_ptr = &usart;
+    respondUartTaskContext.parser_ptr = &parser;
 
     if(xTemperatureMutex == nullptr) {
         xTemperatureMutex = xSemaphoreCreateMutexStatic(&xMutexBuffer);
@@ -124,7 +130,6 @@ int main(void) {
             xSemaphoreGive(xTemperatureMutex);
         }
     }
-
 
     nvic.setIRQpriority(31, 6);
     nvic.setIRQpriority(32, 6);
@@ -174,7 +179,9 @@ int main(void) {
     displayTemperatureTaskHandle = xTaskCreateStatic(
         vDisplayTempTask, "display", 256, &displayTempTaskContext, 2, displayTemperatureTask, &displayTemperatureTaskBuffer);
 
-    
+    respondUartTaskHandle = xTaskCreateStatic(
+        vRespondUartTask, "respondUart", 256, &respondUartTaskContext, 4, respondUartTask, &respondUartTaskBuffer);
+
     vTaskStartScheduler();
 
     while(1) {}
@@ -190,19 +197,22 @@ void vReadTempTask(void* pvParameters) {
     auto* bme280 = context->bme280_ptr;
     
     if(!(bme280->isAlive())) {
+        //possible communicate of no sensor connection
         SystemReset();
     }
 
     bme280->init();
 
-    int32_t temperature = 0;
+    int32_t localTemperature = 0;
 
     while(1) {
+        localTemperature = bme280->readTemp();
+
         xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
-        temperature = bme280->readTemp();
+        g_temperature = localTemperature;
         xSemaphoreGive(xTemperatureMutex);
 
-        xTaskNotify(displayTemperatureTaskHandle, static_cast<uint32_t>(temperature), eSetValueWithOverwrite);
+        xTaskNotify(displayTemperatureTaskHandle, static_cast<uint32_t>(localTemperature), eSetValueWithOverwrite);
 
         vTaskDelay(pdMS_TO_TICKS(950));
     }
@@ -230,22 +240,54 @@ void vRespondUartTask(void* pvParameters) {
     auto* context = reinterpret_cast<d_RespondUartTaskContext*>(pvParameters);
 
     auto* usart = context->usart_ptr;
+    auto* parser = context->parser_ptr;
 
     char receivedCharacter;
-    char[8] receivedCommand;
-    int32_t localTemp;
+    char receivedCommand[32];
+    uint8_t receivedCommandLength;
+
+    char respondText[32];
+
+    int32_t localTemperature;
+
+    usart->setTaskToNotify();
 
     while(1) {
-        for(int i = 0; i < 8; ++i) {
-            if(takeByteFromRxBuffer(receivedCharacter)) {
-                receivedCommand[i] = receivedCharacter;
-            } else {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        uint8_t it = 0;
+        while(usart->takeByteFromRxBuffer(receivedCharacter)) {
+            if(receivedCharacter == '\n') {
+                receivedCommand[it] = '\0';
                 break;
             }
-        }
 
-        if(parseCommand(receivedCommand)) {
-            commandResponse(localTemp);
+            receivedCommand[it] = receivedCharacter;
+            it++;
+        }
+        receivedCommandLength = it; 
+
+        CommandParser::Command cmd = parser->parseCommand(receivedCommand, receivedCommandLength);
+
+        using enum CommandParser::Command;
+
+        switch(cmd) {
+            case GetTemp:
+                xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
+                localTemperature = g_temperature;
+                xSemaphoreGive(xTemperatureMutex);
+                parser->generateTextForGetTemp(respondText, localTemperature);
+                usart->transmitText(respondText);
+                break;
+            case ResetSystem:
+                parser->generateTextForCommand(respondText, cmd);
+                usart->transmitText(respondText);
+                SystemReset();
+                break;
+            case Unknown:
+                parser->generateTextForCommand(respondText, cmd);
+                usart->transmitText(respondText);
+                break;
         }
     }
 }

@@ -1,6 +1,8 @@
 #ifndef USART_HPP
 #define USART_HPP
 #include <cstdint>
+#include "FreeRTOS.h"
+#include "task.h"
 
 namespace UsartBitPositions {
     //CR1
@@ -39,18 +41,16 @@ class UsartHandle {
     private:
         USART_regs* const m_USART;
 
-        static constexpr uint32_t ASCII_ALIGN = 48;
-        static constexpr char RETURN[2] = {'\r', '\n'};
+        static constexpr char TAIL_CHARS[2] = {'\r', '\n'};
 
-        char m_txBuffer[6];
+        char m_txBuffer[32];
         uint8_t m_txBuffIt = 0;
         
         char m_rxBuffer[32];
         size_t m_rxHead;
         size_t m_rxTail;
 
-        const char* temperatureCommand = "get temp";
-        static constexpr int tempCommandLength = 8;
+        TaskHandle_t m_taskToNotify = nullptr;
 
     public:
         static UsartHandle<baseAddr>* instance;
@@ -58,6 +58,10 @@ class UsartHandle {
             instance = this;
         }
         ~UsartHandle() = default;
+
+        void setTaskToNotify() {
+            m_taskToNotify = xTaskGetCurrentTaskHandle();
+        }
         
         void setBaudRate(uint32_t clockSpeed, uint32_t baudRate) {
             uint32_t brrRegMask;
@@ -73,25 +77,19 @@ class UsartHandle {
             m_USART->CR1 = cr1RegMask;
             m_USART->CR1 |= CR1_UE; 
         }
-        
-        bool parseCommand(char* command) {
-            for(int i = 0; i < tempCommandLength; ++i) {
-                if(temperatureCommand[i] != command[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
 
-        void commandResponse(int32_t temperature) {
+        void transmitText(const char* text) {
             using namespace UsartBitPositions;
-            m_txBuffer[0] = static_cast<char>((temperature / 1000) + ASCII_ALIGN);
-            m_txBuffer[1] = static_cast<char>(((temperature / 100) % 10) + ASCII_ALIGN);
-            m_txBuffer[2] = static_cast<char>(((temperature / 10) % 10) + ASCII_ALIGN);
-            m_txBuffer[3] = static_cast<char>((temperature % 10) + ASCII_ALIGN);
-            m_txBuffer[4] = RETURN[0];
-            m_txBuffer[5] = RETURN[1];
-
+            uint8_t it = 0;
+            while(true) {
+                if(it >= 30 || text[it] == '\0') {
+                    m_txBuffer[it] = TAIL_CHARS[0];
+                    m_txBuffer[it+1] = TAIL_CHARS[1];
+                    break;
+                }
+                m_txBuffer[it] = text[it];
+                it++;
+            }
             m_USART->CR1 |= CR1_TXEIE;
         }
 
@@ -109,22 +107,38 @@ class UsartHandle {
         void handleIRQ() {
             using namespace UsartBitPositions;
             if((m_USART->ISR & ISR_RXNE) && (m_USART->CR1 & CR1_RXNEIE)) {
-                m_rxBuffer[m_rxHead] = m_USART->RDR;
+                uint32_t rxHelper;
+                rxHelper = m_USART->RDR;
+                if (rxHelper == '\r') {
+                    return;
+                }
+                
+                m_rxBuffer[m_rxHead] = static_cast<char>(rxHelper);
                 ++m_rxHead;
-
+                
                 if(m_rxHead >= 32) {
                     m_rxHead = 0;
                 }
+                
+                if(rxHelper == '\n') {
+                    BaseType_t xHigherPriorityTaskHasWoken = pdFALSE;
+                    vTaskNotifyGiveFromISR(m_taskToNotify, &xHigherPriorityTaskHasWoken);
+                    portYIELD_FROM_ISR(xHigherPriorityTaskHasWoken);
+                    return;
+                }
+                
                 return;
             }
 
             if((m_USART->ISR & ISR_TXE) && (m_USART->CR1 & CR1_TXEIE)) {
+                
                 m_USART->TDR = m_txBuffer[m_txBuffIt];
-                ++m_txBuffIt;
-
-                if(m_txBuffIt >= 6) {
+                
+                if(m_txBuffer[m_txBuffIt] == '\n') {
                     m_txBuffIt = 0;
                     m_USART->CR1 &= ~CR1_TXEIE;
+                } else {
+                    ++m_txBuffIt;
                 }
 
                 return;

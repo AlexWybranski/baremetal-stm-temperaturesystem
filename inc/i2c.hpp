@@ -201,10 +201,10 @@ class I2cHandle {
             }
 
             if(m_transferComplete) {
-                BaseType_t xHighierPriorityTaskHasWoken = pdFALSE;
+                BaseType_t xHigherPriorityTaskHasWoken = pdFALSE;
 
                 if (m_taskToNotify != nullptr) {
-                    vTaskNotifyGiveFromISR(m_taskToNotify, &xHighierPriorityTaskHasWoken);
+                    vTaskNotifyGiveFromISR(m_taskToNotify, &xHigherPriorityTaskHasWoken);
                     m_taskToNotify = nullptr;
                 }
 
@@ -219,7 +219,7 @@ class I2cHandle {
                 m_I2C->CR1 &= ~CR1_RXIE;
                 m_I2C->CR1 &= ~CR1_TXIE;
 
-                portYIELD_FROM_ISR(xHighierPriorityTaskHasWoken);
+                portYIELD_FROM_ISR(xHigherPriorityTaskHasWoken);
 
                 return;
             }

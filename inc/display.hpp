@@ -1,8 +1,6 @@
 #ifndef DISPLAY_HPP
 #define DISPLAY_HPP
 #include <cstdint>
-#include "FreeRTOS.h"
-#include "task.h"
 
 template<typename GpioPort, void (*DelayFunc)(uint32_t)>
 class DisplayDriver {
