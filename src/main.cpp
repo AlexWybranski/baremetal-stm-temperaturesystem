@@ -15,7 +15,7 @@
 
 constexpr uint32_t RCC_BASEADDR     = 0x40021000U;
 constexpr uint32_t I2C1_BASEADDR    = 0x40005400U;
-constexpr uint32_t USART1_BASEADDR  = 0x40013800U;
+constexpr uint32_t USART1_BASEADDR  = 0x40004400U; //now: usart2 | default USART1 - 0x40013800U
 constexpr uint32_t GPIOA_BASEADDR   = 0x48000000U;
 constexpr uint32_t GPIOB_BASEADDR   = 0x48000400U;
 constexpr uint32_t GPIOC_BASEADDR   = 0x48000800U;
@@ -49,6 +49,12 @@ extern "C" {
         }
     }
 
+    void USART2_Handler(void) {
+        if(UsartHandle<USART1_BASEADDR>::instance != nullptr) {
+            UsartHandle<USART1_BASEADDR>::instance->handleIRQ();
+        }
+    }
+
     void SystemInit(void) {
         RccHandle<RCC_BASEADDR>::setMsiTo8MHz();
     }
@@ -59,9 +65,9 @@ extern "C" {
 }
 void basicDelay(uint32_t ms);
 
-StackType_t readTemperatureTask[256];
-StackType_t displayTemperatureTask[256];
-StackType_t respondUartTask[256];
+StackType_t readTemperatureTask[128];
+StackType_t displayTemperatureTask[128];
+StackType_t respondUartTask[128];
 
 StaticTask_t readTemperatureTaskBuffer;
 StaticTask_t displayTemperatureTaskBuffer;
@@ -133,18 +139,26 @@ int main(void) {
 
     nvic.setIRQpriority(31, 6);
     nvic.setIRQpriority(32, 6);
+    nvic.setIRQpriority(38, 5);
     nvic.enableIRQ(31);
     nvic.enableIRQ(32);
+    nvic.enableIRQ(38);
 
     for(int i = 0; i < 3; ++i) {
         rcc.enableGpioClock(i);
     }
 
     //PA9 - TX  PA10 - RX
-    gpioA.setPinMode(decltype(gpioA)::Mode::alternate, 9);
-    gpioA.setPinMode(decltype(gpioA)::Mode::alternate, 10);
-    gpioA.setPinAlternateFunction(7, 9);
-    gpioA.setPinAlternateFunction(7, 10);
+    // gpioA.setPinMode(decltype(gpioA)::Mode::alternate, 9);
+    // gpioA.setPinMode(decltype(gpioA)::Mode::alternate, 10);
+    // gpioA.setPinAlternateFunction(7, 9);
+    // gpioA.setPinAlternateFunction(7, 10);
+
+    // //st-link is connected to pa2 and pa3 with default usart2
+    gpioA.setPinMode(decltype(gpioA)::Mode::alternate, 2);
+    gpioA.setPinMode(decltype(gpioA)::Mode::alternate, 3);
+    gpioA.setPinAlternateFunction(7, 2);
+    gpioA.setPinAlternateFunction(7, 3);
 
     //PB8 - SCL PB9 - SDA
     gpioB.setPinMode(decltype(gpioB)::Mode::alternate, 8);
@@ -155,6 +169,7 @@ int main(void) {
     gpioB.setPinAlternateFunction(4, 9);
 
     rcc.enableI2cClock();
+    rcc.enableUsartClock();
 
     i2c.enable();
     i2c.setTiming();
@@ -255,6 +270,10 @@ void vRespondUartTask(void* pvParameters) {
     while(1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
+        for(uint8_t i = 0; i < 32; ++i) {
+            respondText[i] = 0;
+        }
+
         uint8_t it = 0;
         while(usart->takeByteFromRxBuffer(receivedCharacter)) {
             if(receivedCharacter == '\n') {
@@ -282,6 +301,7 @@ void vRespondUartTask(void* pvParameters) {
             case ResetSystem:
                 parser->generateTextForCommand(respondText, cmd);
                 usart->transmitText(respondText);
+                vTaskDelay(pdMS_TO_TICKS(500));
                 SystemReset();
                 break;
             case Unknown:

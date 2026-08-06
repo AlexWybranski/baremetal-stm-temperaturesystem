@@ -6,20 +6,22 @@
 
 namespace UsartBitPositions {
     //CR1
-    static constexpr uint32_t CR1_UE = (0b1U << 0);
-    static constexpr uint32_t CR1_RE = (0b1U << 2U);
-    static constexpr uint32_t CR1_TE = (0b1U << 3U);
-    static constexpr uint32_t CR1_RXNEIE = (0b1U << 5U);
-    static constexpr uint32_t CR1_TCIE = (0b1U << 6U);
-    static constexpr uint32_t CR1_TXEIE = (0b1U << 7U);
+    static constexpr uint32_t CR1_UE         = (0b1U << 0);
+    static constexpr uint32_t CR1_RE         = (0b1U << 2U);
+    static constexpr uint32_t CR1_TE         = (0b1U << 3U);
+    static constexpr uint32_t CR1_RXNEIE     = (0b1U << 5U);
+    static constexpr uint32_t CR1_TCIE       = (0b1U << 6U);
+    static constexpr uint32_t CR1_TXEIE      = (0b1U << 7U);
     
     //ISR
-    static constexpr uint32_t ISR_RXNE = (0b1U << 5U);
-    static constexpr uint32_t ISR_TCE = (0b1U << 6U);
-    static constexpr uint32_t ISR_TXE = (0b1U << 7U);
+    static constexpr uint32_t ISR_ORE        = (0b1U << 3U);
+    static constexpr uint32_t ISR_RXNE       = (0b1U << 5U);
+    static constexpr uint32_t ISR_TCE        = (0b1U << 6U);
+    static constexpr uint32_t ISR_TXE        = (0b1U << 7U);
 
     //ICR
-    static constexpr uint32_t ICR_TCCF = (0b1U << 6U);
+    static constexpr uint32_t ICR_ORECF      = (0b1U << 3U);
+    static constexpr uint32_t ICR_TCCF       = (0b1U << 6U);
 }
 
 struct USART_regs {
@@ -41,14 +43,14 @@ class UsartHandle {
     private:
         USART_regs* const m_USART;
 
-        static constexpr char TAIL_CHARS[2] = {'\r', '\n'};
+        static constexpr char TAIL_CHARS[3] = {'\r', '\n', '\0'};
 
         char m_txBuffer[32];
-        uint8_t m_txBuffIt = 0;
+        volatile uint8_t m_txBuffIt = 0;
         
         char m_rxBuffer[32];
-        size_t m_rxHead;
-        size_t m_rxTail;
+        volatile size_t m_rxHead;
+        volatile size_t m_rxTail;
 
         TaskHandle_t m_taskToNotify = nullptr;
 
@@ -80,16 +82,21 @@ class UsartHandle {
 
         void transmitText(const char* text) {
             using namespace UsartBitPositions;
+            for(uint8_t i = 0; i < 32; ++i) {
+                m_txBuffer[i] = 0;
+            }
             uint8_t it = 0;
             while(true) {
-                if(it >= 30 || text[it] == '\0') {
+                if(it >= 29 || text[it] == '\0') {
                     m_txBuffer[it] = TAIL_CHARS[0];
                     m_txBuffer[it+1] = TAIL_CHARS[1];
+                    m_txBuffer[it+2] = TAIL_CHARS[2];
                     break;
                 }
                 m_txBuffer[it] = text[it];
                 it++;
             }
+
             m_USART->CR1 |= CR1_TXEIE;
         }
 
@@ -106,11 +113,15 @@ class UsartHandle {
         
         void handleIRQ() {
             using namespace UsartBitPositions;
+            if(m_USART->ISR & ISR_ORE) {
+                m_USART->ICR |= ICR_ORECF;
+            }
+
             if((m_USART->ISR & ISR_RXNE) && (m_USART->CR1 & CR1_RXNEIE)) {
                 uint32_t rxHelper;
                 rxHelper = m_USART->RDR;
                 if (rxHelper == '\r') {
-                    return;
+                    rxHelper = '\n';
                 }
                 
                 m_rxBuffer[m_rxHead] = static_cast<char>(rxHelper);
@@ -130,11 +141,10 @@ class UsartHandle {
                 return;
             }
 
-            if((m_USART->ISR & ISR_TXE) && (m_USART->CR1 & CR1_TXEIE)) {
-                
+            if((m_USART->ISR & ISR_TXE) && (m_USART->CR1 & CR1_TXEIE)) {    
                 m_USART->TDR = m_txBuffer[m_txBuffIt];
                 
-                if(m_txBuffer[m_txBuffIt] == '\n') {
+                if(m_txBuffer[m_txBuffIt] == '\0') {
                     m_txBuffIt = 0;
                     m_USART->CR1 &= ~CR1_TXEIE;
                 } else {
