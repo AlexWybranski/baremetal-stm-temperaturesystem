@@ -7,8 +7,8 @@ class NvicHandler {
     private:
 
     public:
-    NvicHandler() {}
-    ~NvicHandler() = default;
+        NvicHandler() {}
+        ~NvicHandler() = default;
     
         void enableIRQ(uint32_t irqNum) {
             if(irqNum > 82) return;

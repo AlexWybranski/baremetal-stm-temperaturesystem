@@ -79,6 +79,12 @@ class BME280Handle {
             m_i2c.read(BME_ADDR, TEMP_MSB, m_bmeBuffer, 3);
             temperature = ((m_bmeBuffer[0] << 12U) | (m_bmeBuffer[1] << 4U) | (m_bmeBuffer[2] >> 4U));
             temperature = compensateTemp(temperature);
+            if(temperature > 9999) {
+                temperature = 9999;
+            }
+            if(temperature < 0) {
+                temperature = 0;
+            }
             return temperature;
         }
 };

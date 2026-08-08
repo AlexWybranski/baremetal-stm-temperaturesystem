@@ -2,6 +2,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "semphr.h"
+#include "event_groups.h"
 
 #include "gpio.hpp"
 #include "rcc.hpp"
@@ -10,6 +11,7 @@
 #include "bme280.hpp"
 #include "display.hpp"
 #include "nvic.hpp"
+#include "iwdg.hpp"
 
 #include "cmdparser.hpp"
 
@@ -20,8 +22,12 @@ constexpr uint32_t GPIOA_BASEADDR   = 0x48000000U;
 constexpr uint32_t GPIOB_BASEADDR   = 0x48000400U;
 constexpr uint32_t GPIOC_BASEADDR   = 0x48000800U;
 constexpr uint32_t NVIC_BASEADDR    = 0xE000E000U;
+constexpr uint32_t IWDG_BASEADDR    = 0x40003000U;
 
 constexpr uint32_t CLOCK_SPEED      = 8000000U;
+
+constexpr uint32_t SCB_AIRCR        = 0xE000ED0CU;
+constexpr uint32_t SYSRESET_VECTKEY = 0x05FA0004U;
 
 extern "C" {
     void _init(void) {}
@@ -60,7 +66,7 @@ extern "C" {
     }
 
     void SystemReset(void) { 
-        *(volatile uint32_t*)(0xE000ED0C) = 0x05FA0004; // ← 
+        *(volatile uint32_t*)(SCB_AIRCR) = SYSRESET_VECTKEY; 
     }
 }
 void basicDelay(uint32_t ms);
@@ -68,17 +74,32 @@ void basicDelay(uint32_t ms);
 StackType_t readTemperatureTask[128];
 StackType_t displayTemperatureTask[128];
 StackType_t respondUartTask[128];
+StackType_t watchdogTask[64];
 
 StaticTask_t readTemperatureTaskBuffer;
 StaticTask_t displayTemperatureTaskBuffer;
 StaticTask_t respondUartTaskBuffer;
+StaticTask_t watchdogTaskBuffer;
 
 TaskHandle_t readTemperatureTaskHandle = nullptr;
 TaskHandle_t displayTemperatureTaskHandle = nullptr;
 TaskHandle_t respondUartTaskHandle = nullptr;
+TaskHandle_t watchdogTaskHandle = nullptr;
 
 SemaphoreHandle_t xTemperatureMutex = nullptr;
 StaticSemaphore_t xMutexBuffer;
+
+EventGroupHandle_t xWatchdogEventGroupHandle = nullptr;
+StaticEventGroup_t xWatchdogEventGroup;
+
+namespace WatchdogBits {
+    constexpr EventBits_t xSensorIsAlive = (0b1U << 0);
+    constexpr EventBits_t xDisplayIsAlive = (0b1U << 1U);
+    constexpr EventBits_t xUartIsAlive = (0b1U << 2U);
+
+    constexpr EventBits_t xAllFlags = (xSensorIsAlive | xDisplayIsAlive | xUartIsAlive);
+};
+
 int32_t g_temperature;
 
 struct d_ReadTempTaskContext {
@@ -97,9 +118,14 @@ struct d_RespondUartTaskContext {
     CommandParser* parser_ptr;
 };
 
+struct d_WatchdogTaskContext {
+    IwdgHandle<IWDG_BASEADDR>* iwdg_ptr;
+};
+
 void vReadTempTask(void* pvParameters);
 void vDisplayTempTask(void* pvParameters);
 void vRespondUartTask(void* pvParameters);
+void vWatchdogTask(void* pvParameters);
 
 int main(void) {
     static NvicHandler<NVIC_BASEADDR> nvic;
@@ -117,6 +143,8 @@ int main(void) {
 
     static CommandParser parser;
 
+    static IwdgHandle<IWDG_BASEADDR> iwdg;
+
     static d_ReadTempTaskContext readTempTaskContext;
     readTempTaskContext.gpioB_ptr = &gpioB;
     readTempTaskContext.i2c_ptr = &i2c;
@@ -129,6 +157,9 @@ int main(void) {
     static d_RespondUartTaskContext respondUartTaskContext;
     respondUartTaskContext.usart_ptr = &usart;
     respondUartTaskContext.parser_ptr = &parser;
+
+    static d_WatchdogTaskContext watchdogTaskContext;
+    watchdogTaskContext.iwdg_ptr = &iwdg;
 
     if(xTemperatureMutex == nullptr) {
         xTemperatureMutex = xSemaphoreCreateMutexStatic(&xMutexBuffer);
@@ -189,13 +220,20 @@ int main(void) {
     display.testDisplay();
 
     readTemperatureTaskHandle = xTaskCreateStatic(  
-        vReadTempTask, "readTemp", 256, &readTempTaskContext, 3, readTemperatureTask, &readTemperatureTaskBuffer);
+        vReadTempTask, "readTemp", 128, &readTempTaskContext, 2, readTemperatureTask, &readTemperatureTaskBuffer);
 
     displayTemperatureTaskHandle = xTaskCreateStatic(
-        vDisplayTempTask, "display", 256, &displayTempTaskContext, 2, displayTemperatureTask, &displayTemperatureTaskBuffer);
+        vDisplayTempTask, "display", 128, &displayTempTaskContext, 1, displayTemperatureTask, &displayTemperatureTaskBuffer);
 
     respondUartTaskHandle = xTaskCreateStatic(
-        vRespondUartTask, "respondUart", 256, &respondUartTaskContext, 4, respondUartTask, &respondUartTaskBuffer);
+        vRespondUartTask, "respondUart", 128, &respondUartTaskContext, 3, respondUartTask, &respondUartTaskBuffer);
+
+    watchdogTaskHandle = xTaskCreateStatic(
+        vWatchdogTask, "watchdog", 64, &watchdogTaskContext, 4, watchdogTask, &watchdogTaskBuffer);
+
+    xWatchdogEventGroupHandle = xEventGroupCreateStatic(&xWatchdogEventGroup);
+
+    configASSERT(xWatchdogEventGroupHandle);
 
     vTaskStartScheduler();
 
@@ -211,23 +249,26 @@ void vReadTempTask(void* pvParameters) {
     auto* i2c = context->i2c_ptr;
     auto* bme280 = context->bme280_ptr;
     
-    if(!(bme280->isAlive())) {
-        //possible communicate of no sensor connection
+    if(bme280->isAlive()) {
+        bme280->init();
+    } else {
         SystemReset();
     }
-
-    bme280->init();
 
     int32_t localTemperature = 0;
 
     while(1) {
-        localTemperature = bme280->readTemp();
+        if(bme280->isAlive()) {
+            xEventGroupSetBits(xWatchdogEventGroupHandle, WatchdogBits::xSensorIsAlive);
 
-        xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
-        g_temperature = localTemperature;
-        xSemaphoreGive(xTemperatureMutex);
-
-        xTaskNotify(displayTemperatureTaskHandle, static_cast<uint32_t>(localTemperature), eSetValueWithOverwrite);
+            localTemperature = bme280->readTemp();
+    
+            xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
+            g_temperature = localTemperature;
+            xSemaphoreGive(xTemperatureMutex);
+    
+            xTaskNotify(displayTemperatureTaskHandle, static_cast<uint32_t>(localTemperature), eSetValueWithOverwrite);    
+        }
 
         vTaskDelay(pdMS_TO_TICKS(950));
     }
@@ -242,6 +283,8 @@ void vDisplayTempTask(void* pvParameters) {
     uint32_t receivedTemp = 0;
 
     while(1) {
+        xEventGroupSetBits(xWatchdogEventGroupHandle, WatchdogBits::xDisplayIsAlive);
+
         if(xTaskNotifyWait(0x0UL, 0xffffffffUL, &receivedTemp, 0) == pdTRUE) {
             display->sliceTemp(static_cast<int32_t>(receivedTemp));
         }
@@ -268,46 +311,71 @@ void vRespondUartTask(void* pvParameters) {
     usart->setTaskToNotify();
 
     while(1) {
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        xEventGroupSetBits(xWatchdogEventGroupHandle, WatchdogBits::xUartIsAlive);
 
-        for(uint8_t i = 0; i < 32; ++i) {
-            respondText[i] = 0;
-        }
-
-        uint8_t it = 0;
-        while(usart->takeByteFromRxBuffer(receivedCharacter)) {
-            if(receivedCharacter == '\n') {
-                receivedCommand[it] = '\0';
-                break;
+        if(ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)) == pdPASS) {
+            for(uint8_t i = 0; i < 32; ++i) {
+                respondText[i] = 0;
+            }
+            
+            uint8_t it = 0;
+            while(usart->takeByteFromRxBuffer(receivedCharacter)) {
+                if(receivedCharacter == '\n') {
+                    receivedCommand[it] = '\0';
+                    break;
+                }
+                receivedCommand[it] = receivedCharacter;
+                it++;
+            }
+            
+            receivedCommandLength = it; 
+            
+            CommandParser::Command cmd = parser->parseCommand(receivedCommand, receivedCommandLength);
+            
+            using enum CommandParser::Command;
+            
+            switch(cmd) {
+                case GetTemp:
+                    xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
+                    localTemperature = g_temperature;
+                    xSemaphoreGive(xTemperatureMutex);
+                    parser->generateTextForGetTemp(respondText, localTemperature);
+                    usart->transmitText(respondText);
+                    break;
+            
+                case ResetSystem:
+                    parser->generateTextForCommand(respondText, cmd);
+                    usart->transmitText(respondText);
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    SystemReset();
+                    break;
+            
+                case Unknown:
+                    parser->generateTextForCommand(respondText, cmd);
+                    usart->transmitText(respondText);
+                    break;
             }
 
-            receivedCommand[it] = receivedCharacter;
-            it++;
         }
-        receivedCommandLength = it; 
+    }
+}
 
-        CommandParser::Command cmd = parser->parseCommand(receivedCommand, receivedCommandLength);
+void vWatchdogTask(void* pvParameters) {
+    auto* context = reinterpret_cast<d_WatchdogTaskContext*>(pvParameters); 
 
-        using enum CommandParser::Command;
+    auto* iwdg = context->iwdg_ptr;
 
-        switch(cmd) {
-            case GetTemp:
-                xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
-                localTemperature = g_temperature;
-                xSemaphoreGive(xTemperatureMutex);
-                parser->generateTextForGetTemp(respondText, localTemperature);
-                usart->transmitText(respondText);
-                break;
-            case ResetSystem:
-                parser->generateTextForCommand(respondText, cmd);
-                usart->transmitText(respondText);
-                vTaskDelay(pdMS_TO_TICKS(500));
-                SystemReset();
-                break;
-            case Unknown:
-                parser->generateTextForCommand(respondText, cmd);
-                usart->transmitText(respondText);
-                break;
+    iwdg->setup();
+
+    while(1) {
+        EventBits_t tasksBits = xEventGroupWaitBits(xWatchdogEventGroupHandle,
+                                                    WatchdogBits::xAllFlags,
+                                                    pdTRUE,
+                                                    pdTRUE,
+                                                    pdMS_TO_TICKS(2500));
+
+        if((tasksBits & WatchdogBits::xAllFlags) == WatchdogBits::xAllFlags) {
+            iwdg->feedWatchdog();
         }
     }
 }

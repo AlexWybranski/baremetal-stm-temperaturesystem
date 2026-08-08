@@ -80,9 +80,9 @@ class GpioPortHandle {
             m_GPIO->PUPDR |= (setValue << shift);
         }
 
-        void setPinAlternateFunction(uint32_t function, uint32_t pinNum) {
+        void setPinAlternateFunction(uint32_t functionNum, uint32_t pinNum) {
             constexpr uint32_t resetValue = 0b1111U;
-            const uint32_t setValue = function;
+            const uint32_t setValue = functionNum;
             
             if(pinNum >= 8) {
                 const uint32_t shift = (pinNum - 8U)*4U;

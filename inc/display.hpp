@@ -119,7 +119,7 @@ class DisplayDriver {
                     gpio.setPinState(0, seg);
                     gpio.setPinState(1, pin);
                 }
-                for(uint32_t digit = 0; digit < 10; digit++) {
+                for(uint32_t digit = 0; digit < 10; ++digit) {
                     gpio.setPinState(1, pin);
                     gpio.setMultiplePinsState(1, DIGIT_MAP[digit]);
                     gpio.setPinState(0, pin);

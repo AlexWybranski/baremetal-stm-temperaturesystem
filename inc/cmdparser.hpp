@@ -30,6 +30,7 @@ class CommandParser {
         };
         static constexpr uint32_t m_commandArrayLength = sizeof(m_commandArray) / sizeof(m_commandArray[0]);
         
+        //move it to command struct?
         static constexpr const char* m_responseTestDisplay = "Testing display...";
         static constexpr const char* m_responseResetSystem = "Resetting system...";
         static constexpr const char* m_responseUnknown = "Unknown command";

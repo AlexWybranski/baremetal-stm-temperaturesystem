@@ -50,14 +50,19 @@ class I2cHandle {
     private:
         I2C_regs* const m_I2C;
         
+        uint32_t m_devAddr;
+        
         volatile uint8_t m_buffIterator;
         volatile uint8_t m_bufferLimiter;
-        uint32_t m_devAddr;
+
         uint8_t m_txBuffer[2];
         uint8_t m_rxBuffer[8];
+
         uint8_t m_rxDataSize;
         uint8_t* volatile m_rxBufferDestinationPtr;
+
         bool m_readModeOn;
+
         volatile bool m_transferComplete;
         TaskHandle_t m_taskToNotify = nullptr;
 
@@ -89,7 +94,7 @@ class I2cHandle {
             m_I2C->TIMINGR = timingValue;
         }
 
-        //this function works only in 7 bit addressing mode and take only 1 byte to send
+        //this functions work only in 7 bit addressing mode and take only 1 byte to send
         void write(uint32_t devAddr, 
                    uint8_t innerAddr,
                    uint8_t value)
