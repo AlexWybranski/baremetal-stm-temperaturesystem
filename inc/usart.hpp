@@ -104,7 +104,8 @@ class UsartHandle {
             if(m_rxTail == m_rxHead) return false;
 
             byte = m_rxBuffer[m_rxTail];
-            ++m_rxTail;
+            size_t tempVar = m_rxTail + 1;
+            m_rxTail = tempVar;
 
             if(m_rxTail >= 32) m_rxTail = 0;
 
@@ -125,7 +126,8 @@ class UsartHandle {
                 }
                 
                 m_rxBuffer[m_rxHead] = static_cast<char>(rxHelper);
-                ++m_rxHead;
+                size_t tempVar = m_rxHead + 1;
+                m_rxHead = tempVar;
                 
                 if(m_rxHead >= 32) {
                     m_rxHead = 0;
@@ -148,7 +150,8 @@ class UsartHandle {
                     m_txBuffIt = 0;
                     m_USART->CR1 &= ~CR1_TXEIE;
                 } else {
-                    ++m_txBuffIt;
+                    size_t tempVar = m_txBuffIt + 1;
+                    m_txBuffIt = tempVar;
                 }
 
                 return;

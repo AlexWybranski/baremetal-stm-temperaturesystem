@@ -1,6 +1,6 @@
 #include "cmdparser.hpp"
 
-CommandParser::Command CommandParser::parseCommand(char* command, uint32_t length) {
+CommandParser::Command CommandParser::parseCommand(const char* command, uint32_t length) {
     bool isMatch;
     for(int i = 0; i < m_commandArrayLength; ++i) {
         if(length == m_commandArray[i].length) {

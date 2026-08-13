@@ -6,8 +6,8 @@ MACH	:=cortex-m4
 
 INCFLAGS	:= -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F
 
-CFLAGS		:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -Wall -std=gnu11 -O0 -g
-CXXFLAGS	:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -O0 -g -fno-exceptions -fno-rtti -fno-threadsafe-statics -std=gnu++23
+CFLAGS		:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -Wall -std=gnu11 -O2 -g
+CXXFLAGS	:= -c -mthumb -mfloat-abi=hard -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -O2 -g -fno-exceptions -fno-rtti -fno-threadsafe-statics -std=gnu++23
 LINKFLAGS	:= --specs=nano.specs -mcpu=$(MACH) -mfpu=fpv4-sp-d16 -lstdc++ -mfloat-abi=hard -nostartfiles -mthumb -T startup/stm32_linker_script.ld -Wl,-Map=build/main.map
 
 CFLAGS		+= $(INCFLAGS)
@@ -51,4 +51,19 @@ clean:
 load: $(TARGET)
 	openocd -f /usr/share/openocd/scripts/board/st_nucleo_l4.cfg
 
-.PHONY: all clean load
+clang-analysis: $(TARGET)
+	clang-tidy src/main.cpp src/cmdparser.cpp   --header-filter=inc/.*   -- -std=c++23 -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F
+
+cppcheck: $(TARGET)
+	cppcheck --enable=all \
+         --std=c++23 \
+         -D__GNUC__ \
+         --inline-suppr \
+         --suppress=missingIncludeSystem \
+         -I inc \
+         -i freertos \
+         -i startup \
+         -i src/syscalls.c \
+         src inc
+
+.PHONY: all clean load clang-analysis cppcheck

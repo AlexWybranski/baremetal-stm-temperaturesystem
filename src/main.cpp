@@ -92,6 +92,9 @@ StaticSemaphore_t xMutexBuffer;
 EventGroupHandle_t xWatchdogEventGroupHandle = nullptr;
 StaticEventGroup_t xWatchdogEventGroup;
 
+EventGroupHandle_t xDisplayEventGroupHandle = nullptr;
+StaticEventGroup_t xDisplayEventGroup;
+
 namespace WatchdogBits {
     constexpr EventBits_t xSensorIsAlive = (0b1U << 0);
     constexpr EventBits_t xDisplayIsAlive = (0b1U << 1U);
@@ -100,17 +103,19 @@ namespace WatchdogBits {
     constexpr EventBits_t xAllFlags = (xSensorIsAlive | xDisplayIsAlive | xUartIsAlive);
 };
 
+namespace DisplayBits {
+    constexpr EventBits_t xTemperatureChanged = (0b1U << 0);
+    constexpr EventBits_t xTestDisplay = (0b1U << 1U);
+}
+
 int32_t g_temperature;
 
 struct d_ReadTempTaskContext {
-    GpioPortHandle<GPIOB_BASEADDR>* gpioB_ptr;
-    I2cHandle<I2C1_BASEADDR>* i2c_ptr;
     BME280Handle<I2cHandle<I2C1_BASEADDR>>* bme280_ptr;
 };
 
 struct d_DisplayTempTaskContext {
     DisplayDriver<GpioPortHandle<GPIOC_BASEADDR>, basicDelay>* display_ptr;
-    GpioPortHandle<GPIOC_BASEADDR>* gpioC_ptr;
 };
 
 struct d_RespondUartTaskContext {
@@ -146,13 +151,10 @@ int main(void) {
     static IwdgHandle<IWDG_BASEADDR> iwdg;
 
     static d_ReadTempTaskContext readTempTaskContext;
-    readTempTaskContext.gpioB_ptr = &gpioB;
-    readTempTaskContext.i2c_ptr = &i2c;
     readTempTaskContext.bme280_ptr = &bme280;
 
     static d_DisplayTempTaskContext displayTempTaskContext;
     displayTempTaskContext.display_ptr = &display;
-    displayTempTaskContext.gpioC_ptr = &gpioC;
 
     static d_RespondUartTaskContext respondUartTaskContext;
     respondUartTaskContext.usart_ptr = &usart;
@@ -194,6 +196,8 @@ int main(void) {
     //PB8 - SCL PB9 - SDA
     gpioB.setPinMode(decltype(gpioB)::Mode::alternate, 8);
     gpioB.setPinMode(decltype(gpioB)::Mode::alternate, 9);
+    gpioB.setPinPullUp(decltype(gpioB)::Pull::pullup, 8);
+    gpioB.setPinPullUp(decltype(gpioB)::Pull::pullup, 9);
     gpioB.setPinType(1, 8);
     gpioB.setPinType(1, 9);
     gpioB.setPinAlternateFunction(4, 8);
@@ -217,8 +221,6 @@ int main(void) {
     gpioC.setPinState(1, 2);
     gpioC.setPinState(1, 3);
 
-    display.testDisplay();
-
     readTemperatureTaskHandle = xTaskCreateStatic(  
         vReadTempTask, "readTemp", 128, &readTempTaskContext, 2, readTemperatureTask, &readTemperatureTaskBuffer);
 
@@ -235,6 +237,10 @@ int main(void) {
 
     configASSERT(xWatchdogEventGroupHandle);
 
+    xDisplayEventGroupHandle = xEventGroupCreateStatic(&xDisplayEventGroup);
+
+    configASSERT(xDisplayEventGroupHandle);
+
     vTaskStartScheduler();
 
     while(1) {}
@@ -245,8 +251,6 @@ int main(void) {
 void vReadTempTask(void* pvParameters) {
     auto* context = reinterpret_cast<d_ReadTempTaskContext*>(pvParameters);
     
-    auto* gpioB = context->gpioB_ptr;
-    auto* i2c = context->i2c_ptr;
     auto* bme280 = context->bme280_ptr;
     
     if(bme280->isAlive()) {
@@ -266,8 +270,8 @@ void vReadTempTask(void* pvParameters) {
             xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
             g_temperature = localTemperature;
             xSemaphoreGive(xTemperatureMutex);
-    
-            xTaskNotify(displayTemperatureTaskHandle, static_cast<uint32_t>(localTemperature), eSetValueWithOverwrite);    
+
+            xEventGroupSetBits(xDisplayEventGroupHandle, DisplayBits::xTemperatureChanged);
         }
 
         vTaskDelay(pdMS_TO_TICKS(950));
@@ -277,16 +281,27 @@ void vReadTempTask(void* pvParameters) {
 void vDisplayTempTask(void* pvParameters) {
     auto* context = reinterpret_cast<d_DisplayTempTaskContext*>(pvParameters);
 
-    auto* gpioC = context->gpioC_ptr;
     auto* display = context->display_ptr;
 
-    uint32_t receivedTemp = 0;
+    uint32_t localTemp = 0;
+
+    EventBits_t displayBits;
 
     while(1) {
         xEventGroupSetBits(xWatchdogEventGroupHandle, WatchdogBits::xDisplayIsAlive);
 
-        if(xTaskNotifyWait(0x0UL, 0xffffffffUL, &receivedTemp, 0) == pdTRUE) {
-            display->sliceTemp(static_cast<int32_t>(receivedTemp));
+        displayBits = xEventGroupClearBits(xDisplayEventGroupHandle, (DisplayBits::xTemperatureChanged | DisplayBits::xTestDisplay));
+
+        if((displayBits & DisplayBits::xTemperatureChanged) != 0) {
+            xSemaphoreTake(xTemperatureMutex, portMAX_DELAY);
+            localTemp = g_temperature;
+            xSemaphoreGive(xTemperatureMutex);
+
+            display->sliceTemp(static_cast<int32_t>(localTemp));
+        }
+
+        if((displayBits & DisplayBits::xTestDisplay) != 0) {
+            display->testDisplay();
         }
 
         display->displayTemp();
@@ -349,6 +364,12 @@ void vRespondUartTask(void* pvParameters) {
                     vTaskDelay(pdMS_TO_TICKS(500));
                     SystemReset();
                     break;
+
+                case TestDisplay:
+                    parser->generateTextForCommand(respondText, cmd);
+                    usart->transmitText(respondText);
+                    xEventGroupSetBits(xDisplayEventGroupHandle, DisplayBits::xTestDisplay);
+                    break;
             
                 case Unknown:
                     parser->generateTextForCommand(respondText, cmd);
@@ -372,7 +393,7 @@ void vWatchdogTask(void* pvParameters) {
                                                     WatchdogBits::xAllFlags,
                                                     pdTRUE,
                                                     pdTRUE,
-                                                    pdMS_TO_TICKS(2500));
+                                                    pdMS_TO_TICKS(3000));
 
         if((tasksBits & WatchdogBits::xAllFlags) == WatchdogBits::xAllFlags) {
             iwdg->feedWatchdog();
@@ -388,6 +409,7 @@ void basicDelay(uint32_t ms) {
         for (volatile uint32_t i = 0U; i < 1000U; i = i + 1) {
             __asm__ __volatile__("nop");
         }
-        remaining_ms = remaining_ms - 1;
+        uint32_t tempVar = remaining_ms - 1;
+        remaining_ms = tempVar;
     }
 }

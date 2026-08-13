@@ -18,7 +18,7 @@ class CommandParser {
             Command id;
         };
 
-        Command parseCommand(char* command, uint32_t length);
+        Command parseCommand(const char* command, uint32_t length);
 
         void generateTextForGetTemp(char* textBuff, int32_t temperature);
         void generateTextForCommand(char* textBuff, Command cmd);
@@ -26,7 +26,8 @@ class CommandParser {
     private:
         static constexpr CommandBlueprint m_commandArray[] = {
             {"get temp", 8, Command::GetTemp},
-            {"system reset", 12, Command::ResetSystem}
+            {"system reset", 12, Command::ResetSystem},
+            {"test display", 12, Command::TestDisplay}
         };
         static constexpr uint32_t m_commandArrayLength = sizeof(m_commandArray) / sizeof(m_commandArray[0]);
         

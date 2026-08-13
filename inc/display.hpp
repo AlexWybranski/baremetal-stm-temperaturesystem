@@ -108,23 +108,22 @@ class DisplayDriver {
 
         void testDisplay() {
             for(uint32_t pin = 0; pin<4; ++pin) {
+                gpio.setPinState(1, pin);
+                gpio.setMultiplePinsState(1, ALL_SEG_MASK);
+                gpio.setPinState(0, pin);
+
+                DelayFunc(100U);
+
                 gpio.setMultiplePinsState(0, ALL_SEG_MASK);
                 gpio.setPinState(1, pin);
-                for(uint32_t seg = 4; seg < 12; ++seg) {
-                    gpio.setPinState(1, seg);
-                    gpio.setPinState(0, pin);
-
-                    DelayFunc(100U);
-
-                    gpio.setPinState(0, seg);
-                    gpio.setPinState(1, pin);
-                }
+            }
+            for(uint32_t pin = 0; pin<4; ++pin) {
                 for(uint32_t digit = 0; digit < 10; ++digit) {
                     gpio.setPinState(1, pin);
                     gpio.setMultiplePinsState(1, DIGIT_MAP[digit]);
                     gpio.setPinState(0, pin);
                     
-                    DelayFunc(100U);
+                    DelayFunc(50U);
                     
                     gpio.setMultiplePinsState(0, ALL_SEG_MASK);
                     gpio.setPinState(1, pin);

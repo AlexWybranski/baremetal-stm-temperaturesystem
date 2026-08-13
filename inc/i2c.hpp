@@ -163,7 +163,8 @@ class I2cHandle {
             if((m_I2C->ISR & ISR_RXNE) && (m_I2C->CR1 & CR1_RXIE)) {
                 if(m_buffIterator < m_bufferLimiter) {
                     m_rxBufferDestinationPtr[m_buffIterator] = m_I2C->RXDR;
-                    ++m_buffIterator;
+                    uint8_t tempVar = m_buffIterator + 1;
+                    m_buffIterator = tempVar;
                 } else {
                     m_I2C->CR1 &= ~CR1_RXIE;
                 }
@@ -173,7 +174,8 @@ class I2cHandle {
             if((m_I2C->ISR & ISR_TXIS) && (m_I2C->CR1 & CR1_TXIE)) {
                 if(m_buffIterator < m_bufferLimiter) {
                     m_I2C->TXDR = m_txBuffer[m_buffIterator];
-                    ++m_buffIterator;
+                    uint8_t tempVar = m_buffIterator + 1;
+                    m_buffIterator = tempVar;
                 } else {
                     m_I2C->CR1 &= ~CR1_TXIE;
                 }
