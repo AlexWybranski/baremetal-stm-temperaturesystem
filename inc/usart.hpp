@@ -45,12 +45,12 @@ class UsartHandle {
 
         static constexpr char TAIL_CHARS[3] = {'\r', '\n', '\0'};
 
-        char m_txBuffer[32];
+        char m_txBuffer[32]{};
         volatile uint8_t m_txBuffIt = 0;
         
-        char m_rxBuffer[32];
-        volatile size_t m_rxHead;
-        volatile size_t m_rxTail;
+        char m_rxBuffer[32]{};
+        volatile size_t m_rxHead = 0;
+        volatile size_t m_rxTail = 0;
 
         TaskHandle_t m_taskToNotify = nullptr;
 
@@ -144,7 +144,7 @@ class UsartHandle {
             }
 
             if((m_USART->ISR & ISR_TXE) && (m_USART->CR1 & CR1_TXEIE)) {    
-                m_USART->TDR = m_txBuffer[m_txBuffIt];
+                m_USART->TDR = static_cast<uint8_t>(m_txBuffer[m_txBuffIt]);
                 
                 if(m_txBuffer[m_txBuffIt] == '\0') {
                     m_txBuffIt = 0;

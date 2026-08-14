@@ -51,7 +51,7 @@ clean:
 load: $(TARGET)
 	openocd -f /usr/share/openocd/scripts/board/st_nucleo_l4.cfg
 
-clang-analysis: $(TARGET)
+clang-tidy: $(TARGET)
 	clang-tidy src/main.cpp src/cmdparser.cpp   --header-filter=inc/.*   -- -std=c++23 -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F
 
 cppcheck: $(TARGET)
@@ -66,4 +66,16 @@ cppcheck: $(TARGET)
          -i src/syscalls.c \
          src inc
 
-.PHONY: all clean load clang-analysis cppcheck
+clang-cert: $(TARGET)
+	clang-tidy src/main.cpp src/cmdparser.cpp \
+	-checks='-*,cert-*' \
+	--header-filter=inc/.* \
+	-- -std=c++23 -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F^C
+
+clang-hicpp: $(TARGET)
+	clang-tidy src/main.cpp src/cmdparser.cpp \
+  	--checks='-*,cppcoreguidelines-*,hicpp-*' \
+  	--header-filter='inc/.*' \
+  	-- -std=c++23 -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F
+
+.PHONY: all clean load clang-analysis cppcheck clang-cert clang-hicpp

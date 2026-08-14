@@ -94,10 +94,6 @@ class GpioPortHandle {
                 m_GPIO->AFRL |= (setValue << shift); 
             }
         }
-
-        void togglePin(uint32_t pinNum) {
-            m_GPIO->ODR ^= (0b1U << pinNum);
-        }
 };
 
 #endif

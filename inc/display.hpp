@@ -20,7 +20,7 @@ class DisplayDriver {
         static constexpr uint32_t SEG_G = 10;
         static constexpr uint32_t SEG_DP = 11;
         
-        uint8_t tempDigits[4];
+        uint8_t tempDigits[4] = {0,0,0,0};
 
         static constexpr uint32_t ALL_DIG_MASK = ((1U << DIG_1) | (1U << DIG_2) | 
                                                  (1U << DIG_3) | (1U << DIG_4));
@@ -72,7 +72,7 @@ class DisplayDriver {
                                                    PIN_MASK_8, PIN_MASK_9};
 
     public:
-        DisplayDriver(GpioPort &gpio) : gpio(gpio) {}
+        explicit DisplayDriver(GpioPort &gpio) : gpio(gpio) {}
         ~DisplayDriver() = default;
 
         void sliceTemp(int32_t temperature) {

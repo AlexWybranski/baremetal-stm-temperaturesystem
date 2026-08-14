@@ -1,3 +1,0 @@
-Checks: '-*,bugprone-*,cert-*,modernize-*,performance-*,readability-simplify-boolean-expr'
-WarningsAsErrors: ''
-HeaderFilterRegex: 'inc/.*'

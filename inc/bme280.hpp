@@ -14,15 +14,15 @@ class BME280Handle {
         static constexpr uint8_t CONFIG = 0xF5;
         static constexpr uint8_t CTRL_MEAS = 0xF4;
 
-        uint16_t dig_T1; //two addresses 0x88 / 0x89
-        int16_t dig_T2; // 0x8A / 0x8B
-        int16_t dig_T3; // 0x8C / 0x8D
+        uint16_t dig_T1 = 0; //two addresses 0x88 / 0x89
+        int16_t dig_T2 = 0; // 0x8A / 0x8B
+        int16_t dig_T3 = 0; // 0x8C / 0x8D
         
         int32_t t_fine = 0;
         
-        int32_t temperature;
+        int32_t temperature = 0;
 
-        uint8_t m_bmeBuffer[8];
+        uint8_t m_bmeBuffer[8]{};
 
         int32_t compensateTemp(uint32_t temp_raw) {
             int32_t var1, var2, T;
@@ -43,7 +43,7 @@ class BME280Handle {
         }
         
         public:
-        BME280Handle(I2cPort &i2c) : m_i2c(i2c) {}
+        explicit BME280Handle(I2cPort &i2c) : m_i2c(i2c) {}
         ~BME280Handle() = default;
 
         bool isAlive() {
@@ -71,7 +71,7 @@ class BME280Handle {
             m_i2c.write(BME_ADDR, CTRL_MEAS, m_bmeBuffer[0]);
             m_bmeBuffer[0] = 0;
             m_i2c.read(BME_ADDR, CONFIG, m_bmeBuffer, 1);
-            m_bmeBuffer[0] |= ((0b011U << 5U | (0b000U << 2U)));
+            m_bmeBuffer[0] |= (0b011U << 5U);
             m_i2c.write(BME_ADDR, CONFIG, m_bmeBuffer[0]);
         }
 

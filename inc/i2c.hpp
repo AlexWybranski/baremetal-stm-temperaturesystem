@@ -50,20 +50,20 @@ class I2cHandle {
     private:
         I2C_regs* const m_I2C;
         
-        uint32_t m_devAddr;
+        uint32_t m_devAddr = 0;
         
-        volatile uint8_t m_buffIterator;
-        volatile uint8_t m_bufferLimiter;
+        volatile uint8_t m_buffIterator = 0;
+        volatile uint8_t m_bufferLimiter = 0;
 
-        uint8_t m_txBuffer[2];
-        uint8_t m_rxBuffer[8];
+        uint8_t m_txBuffer[2]{};
+        uint8_t m_rxBuffer[8]{};
 
-        uint8_t m_rxDataSize;
-        uint8_t* volatile m_rxBufferDestinationPtr;
+        uint8_t m_rxDataSize = 0;
+        uint8_t* volatile m_rxBufferDestinationPtr = 0;
 
-        bool m_readModeOn;
+        bool m_readModeOn = 0;
 
-        volatile bool m_transferComplete;
+        volatile bool m_transferComplete = 0;
         TaskHandle_t m_taskToNotify = nullptr;
 
     public:
@@ -107,8 +107,7 @@ class I2cHandle {
             m_buffIterator = 0;
             m_readModeOn = 0;
 
-            uint32_t cr2RegMask = m_I2C->CR2;
-            cr2RegMask = 0;
+            uint32_t cr2RegMask = 0;
 
             uint8_t nbytes;
             nbytes = 0x2U;
@@ -141,12 +140,11 @@ class I2cHandle {
             m_buffIterator = 0;
             m_readModeOn = 1;
 
-            uint32_t cr2RegMask = m_I2C->CR2;
             uint8_t nbytes = 0x1U;
             
             m_taskToNotify = xTaskGetCurrentTaskHandle();
 
-            cr2RegMask = 0;
+            uint32_t cr2RegMask = 0;
 
             cr2RegMask =    ((devAddr << CR2_SADD_pos) |
                             (nbytes << CR2_NBYTES_pos) | CR2_START);

@@ -66,7 +66,7 @@ extern "C" {
     }
 
     void SystemReset(void) { 
-        *(volatile uint32_t*)(SCB_AIRCR) = SYSRESET_VECTKEY; 
+        *reinterpret_cast<volatile uint32_t*>(SCB_AIRCR) = SYSRESET_VECTKEY; 
     }
 }
 void basicDelay(uint32_t ms);
@@ -259,7 +259,7 @@ void vReadTempTask(void* pvParameters) {
         SystemReset();
     }
 
-    int32_t localTemperature = 0;
+    int32_t localTemperature;
 
     while(1) {
         if(bme280->isAlive()) {
@@ -283,7 +283,7 @@ void vDisplayTempTask(void* pvParameters) {
 
     auto* display = context->display_ptr;
 
-    uint32_t localTemp = 0;
+    uint32_t localTemp;
 
     EventBits_t displayBits;
 
@@ -403,13 +403,13 @@ void vWatchdogTask(void* pvParameters) {
 
 
 void basicDelay(uint32_t ms) {
-    volatile uint32_t remaining_ms = ms; 
+    volatile uint32_t counter = 0;
+    uint32_t limit = ms*1000;
 
-    while (remaining_ms > 0U) {
-        for (volatile uint32_t i = 0U; i < 1000U; i = i + 1) {
-            __asm__ __volatile__("nop");
-        }
-        uint32_t tempVar = remaining_ms - 1;
-        remaining_ms = tempVar;
+    for (; counter < limit; ) {
+
+        __asm__ __volatile__("nop");
+        uint32_t tempVar = counter + 1;
+        counter = tempVar;
     }
 }
