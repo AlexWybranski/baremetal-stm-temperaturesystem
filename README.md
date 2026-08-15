@@ -69,6 +69,6 @@ Since the project is implemented on the STM32L476RG board, the components are wi
 | **8-Segment Display** | SEG_E | **PC8** | Port C, Pin 8 | LED Segment E Control |
 | **8-Segment Display** | SEG_F | **PC9** | Port C, Pin 9 | LED Segment F Control |
 | **8-Segment Display** | SEG_G | **PC10** | Port C, Pin 10 | LED Segment G Control |
-| **8-Segment Display** | SEG_DP | **PC11** | Port C, Pin 11 | LED Segment Decimal Point Control |\
-\
+| **8-Segment Display** | SEG_DP | **PC11** | Port C, Pin 11 | LED Segment Decimal Point Control |
+
 Software was verified on hardware. [You can see photo of working hardware here.](docs_att/hardware.jpeg)
