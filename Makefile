@@ -54,18 +54,6 @@ load: $(TARGET)
 clang-tidy: $(TARGET)
 	clang-tidy src/main.cpp src/cmdparser.cpp   --header-filter=inc/.*   -- -std=c++23 -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F
 
-cppcheck: $(TARGET)
-	cppcheck --enable=all \
-         --std=c++23 \
-         -D__GNUC__ \
-         --inline-suppr \
-         --suppress=missingIncludeSystem \
-         -I inc \
-         -i freertos \
-         -i startup \
-         -i src/syscalls.c \
-         src inc
-
 clang-cert: $(TARGET)
 	clang-tidy src/main.cpp src/cmdparser.cpp \
 	-checks='-*,cert-*' \
@@ -78,4 +66,4 @@ clang-hicpp: $(TARGET)
   	--header-filter='inc/.*' \
   	-- -std=c++23 -Iinc -Ifreertos/include -Ifreertos/source/ARM_CM4F
 
-.PHONY: all clean load clang-analysis cppcheck clang-cert clang-hicpp
+.PHONY: all clean load clang-analysis clang-cert clang-hicpp
