@@ -2,7 +2,7 @@
 
 #### Disclaimers
 - Due to free profiles of CERT++ in clang-tidy, this code is supposed to be taken as "SEI CERT-ish verified"
-- Although the repository name contains the term "bare-metal", this project evolved to utilize FreeRTOS for high-level task management. However, the project maintains its bare-metal core by featuring a completely custom startup code and linker script written from scratch, bypassing standard IDE generators to ensure deep hardware-level control.
+- Although the repository name contains the term "baremetal", this project evolved to utilize FreeRTOS for high-level task management. However, the project maintains its bare-metal core by featuring a completely custom startup code and linker script written from scratch, bypassing standard IDE generators to ensure deep hardware-level control.
 
 ## System overview
 After RTOS scheduler start, system is reading temperature from BME280 sensor every second. DisplayTask fetches temperature value and shows it on the 8-segment display. In the meantime, UART task is waiting for user command and taking appropriate action based on the input. If all tasks are reporting every 3s independent watchdog is being fed by WatchdogTask.
